@@ -266,7 +266,7 @@ view_subscription() {
     echoContent green "查看订阅链接..."
     # 这里添加查看订阅链接的逻辑
     echoContent green "订阅链接如下："
-    echoContent green "http://example.com/subscription"
+    echoContent green "https://www.1373737.xyz/subscription"
 }
 
 # 增加启动API服务功能
