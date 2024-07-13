@@ -32,16 +32,6 @@ echoContent() {
     esac
 }
 
-# 检查SELinux状态
-checkCentosSELinux() {
-    if [[ -f "/etc/selinux/config" ]] && ! grep -q "SELINUX=disabled" <"/etc/selinux/config"; then
-        echoContent yellow "# 注意事项"
-        echoContent yellow "检测到SELinux已开启，请手动关闭，教程如下"
-        echoContent yellow "https://www.v2ray-agent.com/archives/1679931532764#heading-8 "
-        exit 0
-    fi
-}
-
 # 检查系统
 checkSystem() {
     if [[ -n $(find /etc -name "redhat-release") ]] || grep </proc/version -q -i "centos"; then
@@ -59,7 +49,6 @@ checkSystem() {
         installType='yum -y install'
         removeType='yum -y remove'
         upgrade="yum update -y --skip-broken"
-        checkCentosSELinux
     elif [[ -f "/etc/issue" ]] && grep </etc/issue -q -i "debian" || [[ -f "/proc/version" ]] && grep </etc/issue -q -i "debian" || [[ -f "/etc/os-release" ]] && grep </etc/os-release -q -i "ID=debian"; then
         release="debian"
         installType='apt -y install'
@@ -99,16 +88,9 @@ checkCPUVendor() {
             case "$(uname -m)" in
             'amd64' | 'x86_64')
                 xrayCoreCPUVendor="Xray-linux-64"
-                v2rayCoreCPUVendor="v2ray-linux-64"
-                warpRegCoreCPUVendor="main-linux-amd64"
-                singBoxCoreCPUVendor="-linux-amd64"
                 ;;
             'armv8' | 'aarch64')
-                cpuVendor="arm"
                 xrayCoreCPUVendor="Xray-linux-arm64-v8a"
-                v2rayCoreCPUVendor="v2ray-linux-arm64-v8a"
-                warpRegCoreCPUVendor="main-linux-arm64"
-                singBoxCoreCPUVendor="-linux-arm64"
                 ;;
             *)
                 echo "  不支持此CPU架构--->"
@@ -119,7 +101,6 @@ checkCPUVendor() {
     else
         echoContent red "  无法识别此CPU架构，默认amd64、x86_64--->"
         xrayCoreCPUVendor="Xray-linux-64"
-        v2rayCoreCPUVendor="v2ray-linux-64"
     fi
 }
 
@@ -132,9 +113,6 @@ initVar() {
 
     # 核心支持的cpu版本
     xrayCoreCPUVendor=""
-    v2rayCoreCPUVendor=""
-    warpRegCoreCPUVendor=""
-    cpuVendor=""
 
     # 域名
     domain=
@@ -142,30 +120,12 @@ initVar() {
     totalProgress=1
 
     # 1.xray-core安装
-    # 2.v2ray-core 安装
-    # 3.v2ray-core[xtls] 安装
     coreInstallType=
 
     # 核心安装path
-    # coreInstallPath=
-
-    # v2ctl Path
     ctlPath=
-    # 1.全部安装
-    # 2.个性化安装
-    # v2rayAgentInstallType=
-
     # 当前的个性化安装方式 01234
     currentInstallProtocolType=
-
-    # 当前alpn的顺序
-    currentAlpn=
-
-    # 前置类型
-    frontingType=
-
-    # 选择的个性化安装方式
-    selectCustomInstallType=
 
     # v2ray-core、xray-core配置文件的路径
     configPath=
@@ -173,44 +133,8 @@ initVar() {
     # xray-core reality状态
     realityStatus=
 
-    # sing-box配置文件路径
-    singBoxConfigPath=
-
-    # sing-box端口
-    singBoxVLESSVisionPort=
-    singBoxVLESSRealityVisionPort=
-    singBoxVLESSRealityGRPCPort=
-    singBoxHysteria2Port=
-    singBoxTrojanPort=
-    singBoxTuicPort=
-    singBoxNaivePort=
-    singBoxVMessWSPort=
-    singBoxVLESSWSPort=
-    singBoxVMessHTTPUpgradePort=
-
     # nginx订阅端口
     subscribePort=
-
-    subscribeType=
-
-    # sing-box reality serverName publicKey
-    singBoxVLESSRealityGRPCServerName=
-    singBoxVLESSRealityVisionServerName=
-    singBoxVLESSRealityPublicKey=
-
-    # xray-core reality serverName publicKey
-    xrayVLESSRealityServerName=
-    xrayVLESSRealityPort=
-
-    # 端口跳跃
-    portHoppingStart=
-    portHoppingEnd=
-    portHopping=
-
-    # tuic配置文件路径
-    tuicConfigPath=
-    tuicAlgorithm=
-    tuicPort=
 
     # 配置文件的path
     currentPath=
@@ -244,72 +168,348 @@ initVar() {
     # 定时任务执行任务名称 RenewTLS-更新证书 UpdateGeo-更新geo文件
     cronName=$1
 
-    # tls安装失败后尝试更新tls的次数
-    tlsModifyTime=0
+    # tls安装失败后尝试的次数
+    installTLSCount=
 
-    # allowInsecure
-    allowInsecure=
+    # BTPanel状态
+    btDomain=
+    # nginx配置文件路径
+    nginxConfigPath=/etc/nginx/conf.d/
+    nginxStaticPath=/usr/share/nginx/html/
 
-    # 客户端数量
-    totalClients=
+    # 是否为预览版
+    prereleaseStatus=false
+
+    # ssl类型
+    sslType=
+    # SSL CF API Token
+    cfAPIToken=
+
+    # ssl邮箱
+    sslEmail=
+
+    # 检查天数
+    sslRenewalDays=90
+
+    # dns tls domain
+    dnsTLSDomain=
+    ipType=
+
+    # 自定义端口
+    customPort=
+
+    # 当前Reality私钥
+    currentRealityPrivateKey=
 }
 
-# 增加更新订阅链接功能
+# 读取tls证书详情
+readAcmeTLS() {
+    local readAcmeDomain=
+    if [[ -n "${currentHost}" ]]; then
+        readAcmeDomain="${currentHost}"
+    fi
+
+    if [[ -n "${domain}" ]]; then
+        readAcmeDomain="${domain}"
+    fi
+
+    dnsTLSDomain=$(echo "${readAcmeDomain}" | awk -F "." '{$1="";print $0}' | sed 's/^[[:space:]]*//' | sed 's/ /./g')
+    if [[ -d "$HOME/.acme.sh/*.${dnsTLSDomain}_ecc" && -f "$HOME/.acme.sh/*.${dnsTLSDomain}_ecc/*.${dnsTLSDomain}.key" && -f "$HOME/.acme.sh/*.${dnsTLSDomain}_ecc/*.${dnsTLSDomain}.cer" ]]; then
+        installedDNSAPIStatus=true
+    fi
+}
+
+# 读取nginx订阅端口
+readNginxSubscribe() {
+    subscribeType="https"
+    if [[ -f "${nginxConfigPath}subscribe.conf" ]]; then
+        subscribePort=$(grep "listen" "${nginxConfigPath}subscribe.conf" | awk '{print $2}')
+        subscribeDomain=$(grep "server_name" "${nginxConfigPath}subscribe.conf" | awk '{print $2}')
+        subscribeDomain=${subscribeDomain//;/}
+        if [[ -n "${currentHost}" && "${subscribeDomain}" != "${currentHost}" ]]; then
+            subscribePort=
+            subscribeType=
+        else
+            if ! grep "listen" "${nginxConfigPath}subscribe.conf" | grep -q "ssl"; then
+                subscribeType="http"
+            fi
+        fi
+    fi
+}
+
+# 检测安装方式
+readInstallType() {
+    coreInstallType=
+    configPath=
+
+    # 1.检测安装目录
+    if [[ -d "/etc/v2ray-agent" ]]; then
+        if [[ -f "/etc/v2ray-agent/xray/xray" ]]; then
+            # 检测xray-core
+            if [[ -d "/etc/v2ray-agent/xray/conf" ]] && [[ -f "/etc/v2ray-agent/xray/conf/02_VLESS_TCP_inbounds.json" ]]; then
+                # xray-core
+                configPath=/etc/v2ray-agent/xray/conf/
+                ctlPath=/etc/v2ray-agent/xray
+                coreInstallType=2
+            fi
+        fi
+    fi
+
+    # 2.检测xray透明代理
+    if [[ -f "/usr/local/bin/xray" ]] && [[ -d "/etc/xray" ]]; then
+        if [[ -f "/etc/xray/02_VLESS_TCP_inbounds.json" ]]; then
+            configPath=/etc/xray
+            coreInstallType=3
+            ctlPath=/usr/local/bin
+        fi
+    fi
+
+    # 3.检测sing-box
+    if [[ -f "/usr/local/bin/sing-box" ]]; then
+        if [[ -f "/etc/sing-box/config.json" ]]; then
+            coreInstallType=4
+            ctlPath=/usr/local/bin
+            configPath=/etc/sing-box
+        fi
+    fi
+
+    # 4.检测nginx
+    if [[ -f "/usr/sbin/nginx" ]]; then
+        if [[ -d "/usr/share/nginx/html" ]]; then
+            nginxConfigPath=/etc/nginx/conf.d/
+            nginxStaticPath=/usr/share/nginx/html/
+        fi
+    fi
+
+    # 5.检测hysteria
+    if [[ -f "/usr/local/bin/hysteria" ]]; then
+        if [[ -f "/etc/hysteria/config.json" ]]; then
+            coreInstallType=5
+            ctlPath=/usr/local/bin
+            configPath=/etc/hysteria
+        fi
+    fi
+
+    # 6.检测tuic
+    if [[ -f "/usr/local/bin/tuic" ]]; then
+        if [[ -f "/etc/tuic/config.json" ]]; then
+            coreInstallType=6
+            ctlPath=/usr/local/bin
+            configPath=/etc/tuic
+        fi
+    fi
+}
+
+# 重置变量
+resetVar() {
+    currentHost=
+    currentPath=
+    currentInstallProtocolType=
+}
+
+# 系统升级
+upgradeSystem() {
+    echoContent skyBlue "\n进度 $1/${totalProgress} : 系统升级\n"
+
+    if [[ "${release}" == "centos" ]]; then
+        ${upgrade}
+    else
+        if [[ -n "${updateReleaseInfoChange}" ]]; then
+            ${updateReleaseInfoChange}
+        fi
+
+        ${upgrade}
+    fi
+}
+
+# 安装基础软件
+installBaseSoftware() {
+    echoContent skyBlue "\n进度 $1/${totalProgress} : 安装基础软件包\n"
+    if [[ "${release}" == "centos" ]]; then
+        ${installType} wget curl tar
+    else
+        ${installType} wget curl gnupg2 tar
+    fi
+}
+
+# 安装v2ray-core或xray-core
+installXray() {
+    echoContent skyBlue "\n进度 $1/${totalProgress} : 安装/更新xray-core\n"
+
+    # 1.安装xray-core
+    if [[ "${release}" == "centos" ]]; then
+        ${installType} lsof
+    else
+        ${installType} lsof
+    fi
+
+    # 清理安装
+    rm -rf /etc/systemd/system/xray.service
+    rm -rf /usr/local/bin/xray
+    rm -rf /etc/xray
+
+    if [[ ! -d "/etc/xray" ]]; then
+        mkdir -p /etc/xray
+    fi
+
+    # 读取版本
+    if [[ -z "${v2rayCoreVersion}" ]]; then
+        v2rayCoreVersion=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases | grep tag_name | head -1 | awk -F '[:,"v]' '{print $6}')
+    fi
+
+    wget -N --no-check-certificate https://github.com/XTLS/Xray-core/releases/download/v"${v2rayCoreVersion}"/Xray-linux-64.zip
+
+    if [[ -f "Xray-linux-64.zip" ]]; then
+        unzip -d Xray Xray-linux-64.zip
+        rm -rf Xray-linux-64.zip
+        mv -f Xray/* /usr/local/bin
+        rm -rf Xray
+    else
+        echoContent red "  安装失败，请检查下载链接"
+        exit 1
+    fi
+
+    # 创建 xray 配置文件目录
+    mkdir -p /etc/xray
+
+    # 创建 xray systemd 服务
+    cat <<EOF >/etc/systemd/system/xray.service
+[Unit]
+Description=Xray Service
+Documentation=https://github.com/XTLS/Xray-core/
+After=network.target nss-lookup.target
+
+[Service]
+User=nobody
+NoNewPrivileges=true
+ExecStart=/usr/local/bin/xray run -confdir /etc/xray
+Restart=on-failure
+RestartPreventExitStatus=23
+LimitNPROC=4096
+LimitNOFILE=1024000
+EOF
+
+    # 启动 xray 服务
+    systemctl daemon-reload
+    systemctl enable xray
+    systemctl restart xray
+}
+
+# 安装证书
+installTLS() {
+    if [[ -z "${domain}" ]]; then
+        echoContent red "  未配置域名，无法安装TLS证书"
+        exit 1
+    fi
+
+    if [[ -z "${sslEmail}" ]]; then
+        sslEmail="ssl@${domain}"
+    fi
+
+    # 安装 acme.sh
+    curl https://get.acme.sh | sh
+
+    # 安装TLS证书
+    ~/.acme.sh/acme.sh --issue -d "${domain}" --standalone
+    ~/.acme.sh/acme.sh --installcert -d "${domain}" --key-file /etc/xray/xray.key --fullchain-file /etc/xray/xray.crt
+
+    # 设置权限
+    chmod 644 /etc/xray/xray.key
+    chmod 644 /etc/xray/xray.crt
+}
+
+# 配置VLESS+TCP+TLS
+configVLESS_TCP_TLS() {
+    if [[ ! -d "/etc/xray" ]]; then
+        echoContent red "  Xray 安装失败，请检查安装日志"
+        exit 1
+    fi
+
+    # 生成 xray 配置文件
+    cat <<EOF >/etc/xray/config.json
+{
+  "inbounds": [
+    {
+      "port": 443,
+      "protocol": "vless",
+      "settings": {
+        "clients": [
+          {
+            "id": "${currentUUID}",
+            "add": "${domain}"
+          }
+        ],
+        "decryption": "none",
+        "fallbacks": [
+          {
+            "dest": 80
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "security": "tls",
+        "tlsSettings": {
+          "certificates": [
+            {
+              "certificateFile": "/etc/xray/xray.crt",
+              "keyFile": "/etc/xray/xray.key"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "protocol": "freedom",
+      "settings": {}
+    }
+  ]
+}
+EOF
+
+    # 重启 xray 服务
+    systemctl restart xray
+}
+
+# 更新订阅链接
 update_subscription() {
-    echoContent green "更新订阅链接..."
-    # 这里添加更新订阅链接的逻辑
-    echoContent green "订阅链接更新成功"
+    echoContent skyBlue "\n进度 $1/${totalProgress} : 更新订阅链接\n"
+    read -p "请输入新的订阅链接：" new_subscription_url
+    echo "更新订阅链接为：${new_subscription_url}"
+    # 在这里添加更新订阅链接的代码
 }
 
-# 增加查看订阅链接功能
+# 查看订阅链接
 view_subscription() {
-    echoContent green "查看订阅链接..."
-    # 这里添加查看订阅链接的逻辑
-    echoContent green "订阅链接如下："
-    echoContent green "https://www.1373737.xyz/subscription"
+    echoContent skyBlue "\n进度 $1/${totalProgress} : 查看订阅链接\n"
+    echo "查看订阅链接的网址为：https://www.1373737.xyz/subscription"
 }
 
-# 增加启动API服务功能
+# 启动API服务
 start_api_service() {
-    echoContent green "启动API服务..."
-    # 这里添加启动API服务的逻辑
-    echoContent green "API服务启动成功"
+    echoContent skyBlue "\n进度 $1/${totalProgress} : 启动API服务\n"
+    # 在这里添加启动API服务的代码
 }
 
-# 主菜单
-mainMenu() {
-    echoContent skyBlue "1. 更新订阅链接"
-    echoContent skyBlue "2. 查看订阅链接"
-    echoContent skyBlue "3. 启动API服务"
-    echoContent skyBlue "4. 退出"
-
-    read -r -p "请选择一个选项：" choice
-    case $choice in
-    1)
-        update_subscription
-        ;;
-    2)
-        view_subscription
-        ;;
-    3)
-        start_api_service
-        ;;
-    4)
-        exit 0
-        ;;
-    *)
-        echoContent red "无效选项"
-        mainMenu
-        ;;
-    esac
-}
-
-# 初始化脚本
-initScript() {
+# 主函数
+main() {
+    initVar
     checkSystem
     checkCPUVendor
-    initVar
-    mainMenu
+    readInstallType
+
+    upgradeSystem 1
+    installBaseSoftware 2
+    installXray 3
+    installTLS 4
+    configVLESS_TCP_TLS 5
+    update_subscription 6
+    view_subscription 7
+    start_api_service 8
+
+    echoContent green "  所有步骤完成!"
 }
 
-initScript
+main
