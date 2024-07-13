@@ -13,101 +13,85 @@ install_python_and_flask() {
     python3 -m pip install Flask
 }
 
-# 安装V2Ray和Xray-core
-install_v2ray_and_xray() {
-    echo "安装V2Ray..."
-    bash <(curl -L -s https://install.direct/go.sh)
-    systemctl enable v2ray
-    systemctl start v2ray
-
+# 安装Xray-core并配置Caddy和Let's Encrypt证书
+install_xray_and_caddy_with_letsencrypt() {
     echo "安装Xray-core..."
     bash <(curl -L -s https://github.com/XTLS/Xray-install/raw/main/install-release.sh)
     systemctl enable xray
     systemctl start xray
+
+    echo "安装Caddy并配置Let's Encrypt证书..."
+    apt update && apt install -y caddy
+
+    local domain="your_domain.com"  # 替换为你的域名
+    local email="your_email@example.com"  # 替换为你的电子邮件地址
+
+    cat > /etc/caddy/Caddyfile <<EOF
+$domain {
+    tls $email
+    file_server {
+        root /var/www/html
+    }
+}
+EOF
+
+    systemctl restart caddy
+    echo "Xray-core和Caddy安装完成。"
 }
 
-# 配置VLESS+WS+Xray
+# 配置VLESS+WS+Xray（示意性，需要你填充具体配置）
 configure_vless_ws_xray() {
     echo "配置VLESS+WS+Xray..."
-    # 配置文件内容
+    # 你需要在这里添加Xray的配置逻辑
+    # 例如，生成或修改 /etc/xray/config.json
 }
 
-# 安装Caddy并配置证书自动更新
-install_and_configure_caddy() {
-    echo "安装Caddy..."
-    apt install -y debian-keyring debian-archive-keyring apt-transport-https
-    curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | tee /etc/apt/trusted.gpg.d/caddy-stable.asc
-    curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list
-    apt update
-    apt install -y caddy
-    # Caddy配置文件内容
-}
-
-# 更新订阅链接
+# 更新订阅链接（示意性，需要你实现具体的逻辑）
 update_subscription() {
     echo "更新订阅链接..."
-    # 更新逻辑
+    # 你需要在这里添加更新订阅链接的逻辑
 }
 
-# 查看订阅链接
+# 查看订阅链接（示意性，需要你实现具体的逻辑）
 view_subscription() {
     echo "查看订阅链接..."
-    # 查看逻辑
+    # 你需要在这里添加查看订阅链接的逻辑
 }
 
-# 管理账号
+# 管理账号（示意性，需要你实现具体的逻辑）
 manage_account() {
     echo "管理账号..."
-    # 管理逻辑
+    # 你需要在这里添加账号管理的逻辑
 }
 
-# 启动API服务
+# 启动API服务（示意性，需要你实现具体的逻辑）
 start_api_service() {
     echo "启动API服务..."
-    # 启动API服务逻辑
+    # 你需要在这里添加启动API服务的逻辑
+    # 例如，启动一个Flask应用
 }
 
 # 显示菜单
 show_menu() {
     echo "请选择一个选项："
     echo "1. 安装Python和Flask"
-    echo "2. 安装V2Ray和Xray-core"
+    echo "2. 安装Xray-core并配置Caddy及Let's Encrypt证书"
     echo "3. 配置VLESS+WS+Xray"
-    echo "4. 安装Caddy并配置证书自动更新"
-    echo "5. 更新订阅链接"
-    echo "6. 查看订阅链接"
-    echo "7. 管理账号"
-    echo "8. 启动API服务"
+    echo "4. 更新订阅链接"
+    echo "5. 查看订阅链接"
+    echo "6. 管理账号"
+    echo "7. 启动API服务"
     read -p "输入选项数字: " option
 
     case $option in
-        1)
-            install_python_and_flask
-            ;;
-        2)
-            install_v2ray_and_xray
-            ;;
-        3)
-            configure_vless_ws_xray
-            ;;
-        4)
-            install_and_configure_caddy
-            ;;
-        5)
-            update_subscription
-            ;;
-        6)
-            view_subscription
-            ;;
-        7)
-            manage_account
-            ;;
-        8)
-            start_api_service
-            ;;
-        *)
-            echo "无效选项，请重新运行脚本。"
-            ;;
+        1) install_python_and_flask ;;
+        2) install_xray_and_caddy_with_letsencrypt ;;
+        3) configure_vless_ws_xray ;;
+        4) update_subscription ;;
+        5) view_subscription ;;
+        6) manage_account ;;
+        7) start_api_service ;;
+        *) echo "无效选项，请重新运行脚本。" ;;
     esac
 }
 
@@ -117,4 +101,4 @@ main() {
 }
 
 # 执行主函数
-main
+main "$@"
